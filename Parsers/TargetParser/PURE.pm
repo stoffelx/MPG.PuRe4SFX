@@ -1,4 +1,4 @@
-#getFullTxt target parser for MPG.PuRe - V0.1 - (ch) 2025-03-17
+#getSelectedFullTxt target parser for MPG.PuRe - V0.3 - (ch) 2025-08-18
 package Parsers::TargetParser::MPG::PURE;
 
 use base qw(Parsers::TargetParser);
@@ -22,10 +22,10 @@ sub     getSelectedFullTxt {
         my ($self,$ctx_obj)     = @_;
 
         # read attributes from context object
-        my $author =     $ctx_obj->get('rft.creator');
-        my $title  =     $ctx_obj->get('rft.title');
+        my $title  =     $ctx_obj->get('rft.atitle') || $ctx_obj->get('rft.btitle');
+        my $author =     ($ctx_obj->get('@rft.aulast') && $ctx_obj->get('@rft.aulast')->[0]) ? $ctx_obj->get('@rft.aulast')->[0] : '';
         my $inst   =     $ctx_obj->{'@req.institutes'}->[0] || '';
-
+        
 #########if-loop ggf. wieder entfernen - implementiert für Testzwecke
         if (!$inst) {
             my $inst   =     $ctx_obj->get('sfx.institute');
@@ -43,7 +43,6 @@ sub     getSelectedFullTxt {
 
         $author =~ s/,.*//g;
 
-
 ####################################################################################################################
 #JSON query object config                                                                                          #
 ####################################################################################################################
@@ -51,7 +50,7 @@ sub     getSelectedFullTxt {
             'Content-Type' => 'application/json'
             ];
 
-        my $queryobject = "{\"query\":{\"bool\":{\"must\":[{\"term\":{\"publicState\":{\"value\":\"RELEASED\"}}},{\"term\":{\"versionState\":{\"value\":\"RELEASED\"}}},{\"bool\":{\"must\":[{\"bool\":{\"must\":[{\"bool\":{\"should\":[{\"match\":{\"metadata.title\":{\"operator\":\"and\",\"query\":\"" . $title . "\"}}},{\"match\":{\"metadata.alternativeTitles.value\":{\"operator\":\"and\",\"query\":\"" . $title . "\"}}}]}},{\"multi_match\":{\"fields\":[\"metadata.creators.person.familyName\",\"metadata.creators.person.givenName\"],\"operator\":\"and\",\"query\":\"" . $author . "\",\"type\":\"cross_fields\"}}]}},{\"bool\":{\"should\":[{\"nested\":{\"path\":\"files\",\"query\":{\"bool\":{\"must\":[{\"term\":{\"files.storage\":{\"value\":\"INTERNAL_MANAGED\"}}},{\"bool\":{\"should\":[{\"term\":{\"files.visibility\":{\"value\":\"AUDIENCE\"}}},{\"term\":{\"files.visibility\":{\"value\":\"PUBLIC\"}}}]}}]}},\"score_mode\":\"avg\"}},{\"nested\":{\"path\":\"files\",\"query\":{\"bool\":{\"must\":[{\"term\":{\"files.storage\":{\"value\":\"EXTERNAL_URL\"}}}]}},\"score_mode\":\"avg\"}}]}}]}}]}}}";
+        my $queryobject = "{\"query\":{\"bool\":{\"must\":[{\"term\":{\"publicState\":{\"value\":\"RELEASED\"}}},{\"term\":{\"versionState\":{\"value\":\"RELEASED\"}}},{\"bool\":{\"must\":          [{\"bool\":{\"must\":[{\"bool\":{\"should\":[{\"match\":{\"metadata.title\":{\"operator\":\"and\",\"query\":\"" . $title . "\"}}},{\"match\":{\"metadata.alternativeTitles.value\":{\"operator\":     \"and\",\"query\":\"" . $title . "\"}}}]}},{\"multi_match\":{\"fields\":[\"metadata.creators.person.familyName\",\"metadata.creators.person.givenName\"],\"operator\":\"and\",\"query\":\"" .         $author . "\",\"type\":\"cross_fields\"}}]}},{\"bool\":{\"should\":[{\"nested\":{\"path\":\"files\",\"query\":{\"bool\":{\"must\":[{\"term\":{\"files.storage\":{\"value\":\"INTERNAL_MANAGED\"}}},   {\"bool\":{\"should\":[{\"term\":{\"files.visibility\":{\"value\":\"AUDIENCE\"}}},{\"term\":{\"files.visibility\":{\"value\":\"PUBLIC\"}}}]}}]}},\"score_mode\":\"avg\"}},{\"nested\":{\"path\":      \"files\",\"query\":{\"bool\":{\"must\":[{\"term\":{\"files.storage\":{\"value\":\"EXTERNAL_URL\"}}}]}},\"score_mode\":\"avg\"}}]}}]}}]}}}";
 
         my $ua = LWP::UserAgent->new();
         my $purerequest = HTTP::Request->new('POST', $host, $header, $queryobject);
@@ -152,8 +151,12 @@ sub     getSelectedFullTxt {
 #hand over preferred URL for delivery                                                                              #
 ####################################################################################################################
 
-        bless $preferredmatch;
-        
+        unless(!$preferredmatch) {
+            bless $preferredmatch;
+            } else {
+            debug "PURE_ERROR: no preferred URL detectable";
+            }
+
         my $url = '';
 
         if ($preferredmatch->{'location'} eq 'EXTERNAL') {
@@ -161,10 +164,13 @@ sub     getSelectedFullTxt {
             } else {
             $host =~ s/\/rest\/items\/search//g;
             $url = $host . $preferredmatch->{'path'};
-            }
+            }  
+
 
         return URI->new("$url");
 
 }
 
 1;
+
+
