@@ -1,4 +1,4 @@
-#lookup plug-in for MPG.PuRe - V0.6 - (ch) 2025-08-22
+#lookup plug-in for MPG.PuRe - V0.7 - (ch) 2025-09-19
 package Parsers::PlugIn::MPG_PURE;
 
 use base qw(Parsers::PlugIn);
@@ -20,19 +20,15 @@ sub lookup {
         my $title  =     $ctx_obj->get('rft.atitle') || $ctx_obj->get('rft.btitle');
         my $author =     ($ctx_obj->get('@rft.aulast') && $ctx_obj->get('@rft.aulast')->[0]) ? $ctx_obj->get('@rft.aulast')->[0] : '';
         my $inst   =     $ctx_obj->{'@req.institutes'}->[0] || '';
+        my $pureid =     $ctx_obj->get('pureid') || '';
 
-        my $ou     =     $ctx_obj->get('sfx.openurl');
-        my $pureid =     $ctx_obj->get('PuReId') || '';
-        if (!$pureid && $ou =~ /PuReId/) {
-            $ou =~ m/(?<=PuReId\=)(.+?\d+)/;
-            $pureid = $1;
-            } 
+#        my $ou     =     $ctx_obj->get('sfx.openurl');
+#        my $pureid =     $ctx_obj->get('PuReId') || '';
+#        if (!$pureid && $ou =~ /PuReId/) {
+#            $ou =~ m/(?<=PuReId\=)(.+?\d+)/;
+#            $pureid = $1;
+#            } 
 
-        
-#########if-loop ggf. wieder entfernen - implementiert für Testzwecke
-#        if (!$inst) {
-#            my $inst   =     $ctx_obj->get('sfx.institute');
-#            }
 	
         # read params from config file
         my $config_file         = "mpg_pure.config";
@@ -47,10 +43,10 @@ sub lookup {
 
 
         # author formatting for API request
-	$author =~ s/,.*//g;
+        $author =~ s/,.*//g;
 
 
-        # some debug for more comfortabel testing
+        # some debug for more comfortable testing
         debug "PURE_INSTITUTE is: $inst";
         debug "PURE_AUDIENCE is: $requestaudience";
         #debug "PURE_OPENURL is: $ou";
@@ -80,7 +76,7 @@ sub lookup {
             my $json = JSON->new;
             my $output = $json->decode($responsejson);
 	
-            debug $output;
+            debug "PURE_RESPONSE is: " . Dumper($output);
 	
             foreach my $responserecord (@{$output->{records}}) {
                 foreach my $responsefile (@{$responserecord->{data}->{files}}) {
@@ -119,7 +115,7 @@ sub lookup {
             my $json = JSON->new;
             my $output = $json->decode($responsejson);
 
-            debug $output;
+            debug "PURE_RESPONSE is: " . Dumper($output);
 
             foreach my $responsefile (@{$output->{files}}) {
                 unless ($responsefile->{visibility} eq 'PRIVATE') {
@@ -206,10 +202,10 @@ sub lookup {
 ####################################################################################################################
 
         unless (!$preferredmatch) {
-            debug Dumper($preferredmatch);
+            debug "PURE_PREFERRED URL is: " . Dumper($preferredmatch);
             return 1;
             } else {
-	    debug "NO PURE-PlugIn preferred URL retrievable";
+	        debug "NO PURE-PlugIn preferred URL retrievable";
             return 0;
         }
 }
