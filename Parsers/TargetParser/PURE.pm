@@ -1,9 +1,8 @@
-#getSelectedFullTxt target parser for MPG.PuRe - V0.4 - (ch) 2025-08-22
+#getSelectedFullTxt target parser for MPG.PuRe - V0.5 - (ch) 2025-09-19
 package Parsers::TargetParser::MPG::PURE;
 
 use base qw(Parsers::TargetParser);
 use Parsers::TargetParser;
-use SFXMenu::Debug qw(debug error);
 use Manager::Config;
 use strict;
 use warnings;
@@ -25,19 +24,15 @@ sub     getSelectedFullTxt {
         my $title  =     $ctx_obj->get('rft.atitle') || $ctx_obj->get('rft.btitle');
         my $author =     ($ctx_obj->get('@rft.aulast') && $ctx_obj->get('@rft.aulast')->[0]) ? $ctx_obj->get('@rft.aulast')->[0] : '';
         my $inst   =     $ctx_obj->{'@req.institutes'}->[0] || '';
+		my $pureid =     $ctx_obj->get('pureid') || '';
         
-        my $ou     =     $ctx_obj->get('sfx.openurl');
-        my $pureid =     $ctx_obj->get('PuReId') || '';
-            if (!$pureid && $ou =~ /PuReId/) {
-                $ou =~ m/(?<=PuReId\=)(.+?\d+)/;
-                $pureid = $1;
-                }
+#        my $ou     =     $ctx_obj->get('sfx.openurl');
+#        my $pureid =     $ctx_obj->get('PuReId') || '';
+#            if (!$pureid && $ou =~ /PuReId/) {
+#               $ou =~ m/(?<=PuReId\=)(.+?\d+)/;
+#                $pureid = $1;
+#                }
 
-
-#########if-loop ggf. wieder entfernen - implementiert für Testzwecke
-#        if (!$inst) {
-#            my $inst   =     $ctx_obj->get('sfx.institute');
-#            }
 
         # read params from config file
         my $config_file         = "mpg_pure.config";
@@ -107,15 +102,14 @@ sub     getSelectedFullTxt {
         } else {
          
             $ihost = $ihost . $pureid;
+
             my $ua = LWP::UserAgent->new();
             my $purerequest = HTTP::Request->new('GET', $ihost);
-
             my $pureresponse = $ua->request($purerequest);
             my $responsejson = $pureresponse->content;
+
             my $json = JSON->new;
             my $output = $json->decode($responsejson);
-
-            debug $output;
 
             foreach my $responsefile (@{$output->{files}}) {
                 unless ($responsefile->{visibility} eq 'PRIVATE') {
@@ -203,8 +197,6 @@ sub     getSelectedFullTxt {
 
         unless(!$preferredmatch) {
             bless $preferredmatch;
-            } else {
-            debug "PURE_ERROR: no preferred URL detectable";
             }
 
         my $url = '';
@@ -213,7 +205,6 @@ sub     getSelectedFullTxt {
             $url = $preferredmatch->{'path'};
             } else {
             $url = $host . $preferredmatch->{'path'};
-            debug "MPG::PURE FullTxtURL is: $url";
             }  
 
 
