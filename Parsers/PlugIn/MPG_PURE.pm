@@ -1,4 +1,4 @@
-#lookup plug-in for MPG.PuRe - V0.7 - (ch) 2025-09-19
+#lookup plug-in for MPG.PuRe - V0.7.1 - (ch) 2026-02-06
 package Parsers::PlugIn::MPG_PURE;
 
 use base qw(Parsers::PlugIn);
@@ -16,26 +16,19 @@ sub lookup {
 
         my ($self,$ctx_obj)     = @_;
 
-        # read attributes from context object		
+        # read attributes from context object
         my $title  =     $ctx_obj->get('rft.atitle') || $ctx_obj->get('rft.btitle');
         my $author =     ($ctx_obj->get('@rft.aulast') && $ctx_obj->get('@rft.aulast')->[0]) ? $ctx_obj->get('@rft.aulast')->[0] : '';
         my $inst   =     $ctx_obj->{'@req.institutes'}->[0] || '';
         my $pureid =     $ctx_obj->get('pureid') || '';
 
-#        my $ou     =     $ctx_obj->get('sfx.openurl');
-#        my $pureid =     $ctx_obj->get('PuReId') || '';
-#        if (!$pureid && $ou =~ /PuReId/) {
-#            $ou =~ m/(?<=PuReId\=)(.+?\d+)/;
-#            $pureid = $1;
-#            } 
 
-	
         # read params from config file
         my $config_file         = "mpg_pure.config";
         my $config_parser       = new Manager::Config(file=>$config_file);
         my $ihost               = $config_parser->getSection('host','item');
         my $shost               = $config_parser->getSection('host','search');
-        
+
         my $requestaudience = '';
         if ($inst) {
             $requestaudience = $config_parser->getSection('audience', $inst);
@@ -49,7 +42,6 @@ sub lookup {
         # some debug for more comfortable testing
         debug "PURE_INSTITUTE is: $inst";
         debug "PURE_AUDIENCE is: $requestaudience";
-        #debug "PURE_OPENURL is: $ou";
         debug "PURE_ID is: $pureid";
 
 
@@ -58,7 +50,7 @@ sub lookup {
         my %filedata;
         my @audiences = ();
 
-        
+
         # initiate API request
         if (!$pureid) {
 
@@ -66,18 +58,33 @@ sub lookup {
                 'Content-Type' => 'application/json'
                 ];
 
-            my $queryobject = "{\"query\":{\"bool\":{\"must\":[{\"term\":{\"publicState\":{\"value\":\"RELEASED\"}}},{\"term\":{\"versionState\":{\"value\":\"RELEASED\"}}},{\"bool\":{\"must\":[{\"bool\":{\"must\":[{\"bool\":{\"should\":[{\"match\":{\"metadata.title\":{\"operator\":\"and\",\"query\":\"" . $title . "\"}}},{\"match\":{\"metadata.alternativeTitles.value\":{\"operator\":\"and\",\"query\":\"" . $title . "\"}}}]}},{\"multi_match\":{\"fields\":[\"metadata.creators.person.familyName\",\"metadata.creators.person.givenName\"],\"operator\":\"and\",\"query\":\"" . $author . "\",\"type\":\"cross_fields\"}}]}},{\"bool\":{\"should\":[{\"nested\":{\"path\":\"files\",\"query\":{\"bool\":{\"must\":[{\"term\":{\"files.storage\":{\"value\":\"INTERNAL_MANAGED\"}}},{\"bool\":{\"should\":[{\"term\":{\"files.visibility\":{\"value\":\"AUDIENCE\"}}},{\"term\":{\"files.visibility\":{\"value\":\"PUBLIC\"}}}]}}]}},\"score_mode\":\"avg\"}},{\"nested\":{\"path\":\"files\",\"query\":{\"bool\":{\"must\":[{\"term\":{\"files.storage\":{\"value\":\"EXTERNAL_URL\"}}}]}},\"score_mode\":\"avg\"}}]}}]}}]}}}";
+            my $queryobject = "{\"query\":{\"bool\":{\"must\":[{\"term\":{\"publicState\":{\"value\":\"RELEASED\"}}},{\"term\":{\"versionState\":{\"value\":\"RELEASED\"}}},{\"bool\":{\"must\":      [{\"bool\":{\"must\":[{\"bool\":{\"should\":[{\"match\":{\"metadata.title\":{\"operator\":\"and\",\"query\":\"" . $title . "\"}}},{\"match\":{\"metadata.alternativeTitles.value\":{\"operator\":     \"and\",\"query\":\"" . $title . "\"}}}]}},{\"multi_match\":{\"fields\":[\"metadata.creators.person.familyName\",\"metadata.creators.person.givenName\"],\"operator\":\"and\",\"query\":\"" .         $author . "\",\"type\":\"cross_fields\"}}]}},{\"bool\":{\"should\":[{\"nested\":{\"path\":\"files\",\"query\":{\"bool\":{\"must\":[{\"term\":{\"files.storage\":{\"value\":\"INTERNAL_MANAGED\"}}},   {\"bool\":{\"should\":[{\"term\":{\"files.visibility\":{\"value\":\"AUDIENCE\"}}},{\"term\":{\"files.visibility\":{\"value\":\"PUBLIC\"}}}]}}]}},\"score_mode\":\"avg\"}},{\"nested\":{\"path\":      \"files\",\"query\":{\"bool\":{\"must\":[{\"term\":{\"files.storage\":{\"value\":\"EXTERNAL_URL\"}}}]}},\"score_mode\":\"avg\"}}]}}]}}]}}}";
+
+
+            # some debug for more comfortable testing
+            debug "PURE_API request JSON: " . Dumper($queryobject);
+
 
             my $ua = LWP::UserAgent->new();
-            my $purerequest = HTTP::Request->new('POST', $shost, $header, $queryobject);
+            my $purerequest = HTTP::Request->new('POST' , $shost , $header , $queryobject);
             my $pureresponse = $ua->request($purerequest);
             my $responsejson = $pureresponse->content;
 
+
+            # some debug for more comfortable testing
+            my $resstat = $pureresponse->{_rc};
+            my $resmsg = $pureresponse->{_msg};
+            debug "PURE_API http status: " . $resstat . " - " . $resmsg . "\n";
+
+
             my $json = JSON->new;
             my $output = $json->decode($responsejson);
-	
+
+
+            # some debug for more comfortable testing
             debug "PURE_RESPONSE is: " . Dumper($output);
-	
+
+
             foreach my $responserecord (@{$output->{records}}) {
                 foreach my $responsefile (@{$responserecord->{data}->{files}}) {
                     unless ($responsefile->{visibility} eq 'PRIVATE') {
@@ -105,17 +112,28 @@ sub lookup {
             }
 
         } else {
-     
+
             $ihost = $ihost . $pureid;
             my $ua = LWP::UserAgent->new();
             my $purerequest = HTTP::Request->new('GET', $ihost);
 
             my $pureresponse = $ua->request($purerequest);
             my $responsejson = $pureresponse->content;
+
+
+            # some debug for more comfortable testing
+            my $resstat = $pureresponse->{_rc};
+            my $resmsg = $pureresponse->{_msg};
+            debug "PURE_API http status: " . $resstat . " - " . $resmsg . "\n";
+
+
             my $json = JSON->new;
             my $output = $json->decode($responsejson);
 
+
+            # some debug for more comfortable testing
             debug "PURE_RESPONSE is: " . Dumper($output);
+
 
             foreach my $responsefile (@{$output->{files}}) {
                 unless ($responsefile->{visibility} eq 'PRIVATE') {
@@ -142,7 +160,7 @@ sub lookup {
             }
         }
 
-		
+
 ####################################################################################################################
 #Iterate @filecollection data for preferred delivery                                                               #
 ####################################################################################################################
@@ -195,8 +213,21 @@ sub lookup {
                     } @filecollection
                 && grep {$_->{'availability'} eq 'AUDIENCE' && $_->{'contenttype'} eq 'pre-print'
                     } @filecollection;
-            }		
-		
+            }
+
+        if (!$preferredmatch) {
+            ($preferredmatch) = grep {$_->{'availability'} eq 'PUBLIC' && $_->{'contenttype'} eq 'multimedia'} @filecollection;
+            }
+
+        if (!$preferredmatch && $requestaudience) {
+            ($preferredmatch) = grep {
+                my $filedata = $_;
+                grep { $_ eq $requestaudience || $_ eq 'mpg'} @{ $filedata->{'audience'} };
+                    } @filecollection
+                && grep {$_->{'availability'} eq 'AUDIENCE' && $_->{'contenttype'} eq 'multimedia'
+                    } @filecollection;
+            }
+
 ####################################################################################################################
 #assess lookup success / failure                                                                                   #
 ####################################################################################################################
@@ -205,7 +236,7 @@ sub lookup {
             debug "PURE_PREFERRED URL is: " . Dumper($preferredmatch);
             return 1;
             } else {
-	        debug "NO PURE-PlugIn preferred URL retrievable";
+            debug "NO PURE-PlugIn preferred URL retrievable";
             return 0;
         }
 }
